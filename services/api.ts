@@ -1,10 +1,26 @@
-import axios, { AxiosError, AxiosRequestConfig } from "axios";
+import { AxiosError, AxiosRequestConfig, create } from "axios";
 
+import { API_BASE_URL, API_TIMEOUT_MS } from "@/constants/env";
 import { clearAuthData, getToken } from "@/utils/auth";
-import { getApiBaseUrl, getApiTimeoutMs } from "@/constants/env";
 
-export const API_BASE_URL = getApiBaseUrl();
-const API_TIMEOUT_MS = getApiTimeoutMs();
+let unauthorizedHandler: (() => void) | null = null;
+
+type RetryRequestConfig = AxiosRequestConfig & { __retryCount?: number };
+
+const RETRYABLE_STATUS_CODES = [408, 425, 429, 500, 502, 503, 504];
+const MAX_RETRIES = 2;
+
+export function setUnauthorizedHandler(handler: () => void) {
+  unauthorizedHandler = handler;
+}
+
+const API = create({
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT_MS,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,77 +32,74 @@ function shouldRetry(error: AxiosError) {
   }
 
   if (!error.response) {
+    // Network error, DNS issue, CORS/proxy disconnect, backend down, etc.
     return true;
   }
 
-  const status = error.response.status;
-  return status === 408 || status === 429 || status === 502 || status === 503 || status === 504;
+  return RETRYABLE_STATUS_CODES.includes(error.response.status);
 }
 
 export function getApiErrorMessage(error: unknown) {
-  if (!error) {
-    return "Request failed";
-  }
-
   const maybeAxios = error as any;
-  const responseMessage = maybeAxios?.response?.data?.message;
-  if (typeof responseMessage === "string" && responseMessage.trim()) {
-    return responseMessage;
+
+  if (maybeAxios?.response?.data?.message) {
+    return String(maybeAxios.response.data.message);
   }
 
-  const code = maybeAxios?.code;
-  if (code === "ECONNABORTED") {
+  if (maybeAxios?.code === "ECONNABORTED") {
     return "Request timed out. Please try again.";
   }
 
   if (!maybeAxios?.response) {
-    return "Network error. Check your connection and server IP.";
+    return "Cannot reach server. Check WSL backend, emulator host, and proxy settings.";
   }
 
-  return "Request failed";
+  return "Something went wrong. Please try again.";
 }
 
-const API = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: API_TIMEOUT_MS,
-});
-
-API.interceptors.request.use(async (req) => {
+API.interceptors.request.use(async (config) => {
   const token = await getToken();
 
   if (token) {
-    req.headers.Authorization = `Bearer ${token}`;
+    config.headers.Authorization = `Bearer ${token}`;
   }
 
   if (__DEV__) {
-    const method = (req.method || "GET").toUpperCase();
-    const url = `${req.baseURL || ""}${req.url || ""}`;
+    const method = (config.method || "GET").toUpperCase();
+    const url = `${config.baseURL || ""}${config.url || ""}`;
     globalThis.console?.log?.(`[API] ${method} ${url}`);
   }
 
-  return req;
+  return config;
 });
 
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
     const axiosError = error as AxiosError;
-    const config = axiosError.config as (AxiosRequestConfig & { __retryCount?: number }) | undefined;
-
-    if (axiosError.response?.status === 401) {
-      await clearAuthData();
-    }
+    const config = axiosError.config as RetryRequestConfig | undefined;
 
     if (config && shouldRetry(axiosError)) {
       const retryCount = config.__retryCount ?? 0;
-      const maxRetries = 2;
 
-      if (retryCount < maxRetries) {
+      if (retryCount < MAX_RETRIES) {
         config.__retryCount = retryCount + 1;
-        const delayMs = 400 * Math.pow(2, retryCount);
+        const delayMs = 350 * Math.pow(2, retryCount);
+
+        if (__DEV__) {
+          globalThis.console?.log?.(
+            `[API] retrying (${config.__retryCount}/${MAX_RETRIES}) in ${delayMs}ms`,
+          );
+        }
+
         await sleep(delayMs);
         return API.request(config);
       }
+    }
+
+    if (error?.response?.status === 401) {
+      await clearAuthData();
+      unauthorizedHandler?.();
     }
 
     if (__DEV__) {
@@ -96,5 +109,23 @@ API.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export async function testApiConnection() {
+  try {
+    // We intentionally call '/' relative to baseURL; even a 404 means network path is OK.
+    await API.get("/", { timeout: 4000 });
+    return { ok: true, reason: "reachable" as const };
+  } catch (error: any) {
+    if (error?.response) {
+      return { ok: true, reason: "reachable-with-http-error" as const };
+    }
+
+    return {
+      ok: false,
+      reason: "unreachable" as const,
+      message: getApiErrorMessage(error),
+    };
+  }
+}
 
 export default API;

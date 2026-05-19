@@ -1,23 +1,23 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 import { Colors, Radius, Spacing, Typography } from "@/constants/Colors";
 import API from "@/services/api";
 import { useAuth } from "../../hooks/useAuth";
 
-interface LoginResponse {
+interface RegisterResponse {
   token: string;
   user: {
     _id: string;
@@ -28,21 +28,28 @@ interface LoginResponse {
   };
 }
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const { login } = useAuth();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Validation", "Please enter email and password.");
+  const handleRegister = async () => {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      Alert.alert("Validation", "Please fill all fields.");
+      return;
+    }
+
+    if (password.trim().length < 6) {
+      Alert.alert("Validation", "Password must be at least 6 characters.");
       return;
     }
 
     try {
       setLoading(true);
-      const { data } = await API.post<LoginResponse>("/auth/login", {
+      const { data } = await API.post<RegisterResponse>("/auth/register", {
+        name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
       });
@@ -51,7 +58,7 @@ export default function LoginScreen() {
       router.replace("/(tabs)");
     } catch (error: any) {
       Alert.alert(
-        "Login failed",
+        "Register failed",
         error?.response?.data?.message || "Something went wrong",
       );
     } finally {
@@ -66,9 +73,15 @@ export default function LoginScreen() {
         style={styles.container}
       >
         <View style={styles.card}>
-          <Text style={styles.title}>SocialConnect</Text>
-          <Text style={styles.subtitle}>Welcome back 👋</Text>
+          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.subtitle}>Join SocialConnect today</Text>
 
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Full name"
+            style={styles.input}
+          />
           <TextInput
             value={email}
             onChangeText={setEmail}
@@ -77,7 +90,6 @@ export default function LoginScreen() {
             autoCapitalize="none"
             style={styles.input}
           />
-
           <TextInput
             value={password}
             onChangeText={setPassword}
@@ -88,20 +100,18 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.button}
-            onPress={handleLogin}
+            onPress={handleRegister}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.buttonText}>Login</Text>
+              <Text style={styles.buttonText}>Register</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => router.push("/(auth)/register" as never)}
-          >
-            <Text style={styles.link}>No account? Register</Text>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.link}>Already have an account? Login</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -130,7 +140,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   title: {
-    fontSize: Typography.display,
+    fontSize: Typography.headline,
     fontWeight: "700",
     color: Colors.black,
   },

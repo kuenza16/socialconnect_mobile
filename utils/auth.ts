@@ -1,41 +1,43 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const TOKEN_KEY = "token";
-const USER_KEY = "user";
+export const AUTH_TOKEN_KEY = "@socialconnect/token";
+export const AUTH_USER_KEY = "@socialconnect/user";
 
-export type AuthUser = unknown;
+export interface AuthUser {
+  _id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  bio?: string;
+}
 
 export async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
+  return AsyncStorage.getItem(AUTH_TOKEN_KEY);
 }
 
 export async function getCurrentUser<T = AuthUser>(): Promise<T | null> {
-  const rawUser = await AsyncStorage.getItem(USER_KEY);
-
-  if (!rawUser) {
+  const value = await AsyncStorage.getItem(AUTH_USER_KEY);
+  if (!value) {
     return null;
   }
 
   try {
-    return JSON.parse(rawUser) as T;
+    return JSON.parse(value) as T;
   } catch {
     return null;
   }
 }
 
-export async function setAuthData(token: string, user: AuthUser): Promise<void> {
+export async function setAuthData(
+  token: string,
+  user: AuthUser,
+): Promise<void> {
   await AsyncStorage.multiSet([
-    [TOKEN_KEY, token],
-    [USER_KEY, JSON.stringify(user)],
+    [AUTH_TOKEN_KEY, token],
+    [AUTH_USER_KEY, JSON.stringify(user)],
   ]);
 }
 
 export async function clearAuthData(): Promise<void> {
-  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+  await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USER_KEY]);
 }
-
-export async function isAuthenticated(): Promise<boolean> {
-  const token = await getToken();
-  return Boolean(token);
-}
-

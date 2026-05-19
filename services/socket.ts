@@ -1,49 +1,62 @@
 import { io, Socket } from "socket.io-client";
 
-import { getSocketBaseUrl } from "@/constants/env";
+import { WS_URL } from "@/constants/env";
 import { getToken } from "@/utils/auth";
 
 let socket: Socket | null = null;
 
-export async function getSocket() {
+function setupDebugListeners(client: Socket) {
+  if (!__DEV__) {
+    return;
+  }
+
+  client.on("connect", () => {
+    globalThis.console?.log?.("[Socket] connected", client.id);
+  });
+
+  client.on("disconnect", (reason) => {
+    globalThis.console?.log?.("[Socket] disconnected", reason);
+  });
+
+  client.on("connect_error", (error) => {
+    globalThis.console?.log?.("[Socket] connect_error", error?.message);
+  });
+}
+
+export async function getSocketClient() {
   if (socket) {
     return socket;
   }
 
   const token = await getToken();
-  const socketUrl = getSocketBaseUrl();
 
-  socket = io(socketUrl, {
-    transports: ["websocket"],
+  socket = io(WS_URL, {
     autoConnect: false,
+    path: "/socket.io",
+    transports: ["websocket", "polling"],
+    timeout: 10000,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
     auth: token ? { token: `Bearer ${token}` } : {},
   });
 
-  if (__DEV__) {
-    socket.on("connect", () => {
-      globalThis.console?.log?.("[Socket] connected", socket?.id);
-    });
-    socket.on("disconnect", (reason) => {
-      globalThis.console?.log?.("[Socket] disconnected", reason);
-    });
-    socket.on("connect_error", (err) => {
-      globalThis.console?.log?.("[Socket] connect_error", err?.message);
-    });
-  }
+  setupDebugListeners(socket);
 
   return socket;
 }
 
 export async function connectSocket() {
-  const s = await getSocket();
+  const client = await getSocketClient();
   const token = await getToken();
-  s.auth = token ? { token: `Bearer ${token}` } : {};
+  client.auth = token ? { token: `Bearer ${token}` } : {};
 
-  if (!s.connected) {
-    s.connect();
+  if (!client.connected) {
+    client.connect();
   }
 
-  return s;
+  return client;
 }
 
 export function disconnectSocket() {

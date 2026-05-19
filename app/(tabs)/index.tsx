@@ -1,72 +1,72 @@
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  BackHandler,
-  Platform,
-  StatusBar,
+  FlatList,
+  RefreshControl,
+  SafeAreaView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
 
-const WEBSITE_URL = "http://192.168.123.53:5000";
+import AppHeader from "@/components/AppHeader";
+import CreatePost from "@/components/CreatePost";
+import PostCard, { Post } from "@/components/PostCard";
+import { Colors } from "@/constants/Colors";
+import API from "@/services/api";
+import { useAuth } from "../../hooks/useAuth";
 
-export default function HomeScreen() {
-  const webViewRef = useRef<WebView>(null);
+export default function FeedScreen() {
+  const { user } = useAuth();
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [canGoBack, setCanGoBack] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  React.useEffect(() => {
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        if (canGoBack && webViewRef.current) {
-          webViewRef.current.goBack();
-          return true;
-        }
+  const fetchPosts = useCallback(async () => {
+    try {
+      const { data } = await API.get<Post[]>("/posts");
+      setPosts(Array.isArray(data) ? data : []);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-        return false;
-      }
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPosts();
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
     );
-
-    return () => backHandler.remove();
-  }, [canGoBack]);
+  }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="#1877f2" />
+    <SafeAreaView style={styles.container}>
+      <AppHeader title="Home" subtitle="Your social feed" />
 
-      <WebView
-        ref={webViewRef}
-        source={{ uri: WEBSITE_URL }}
-        style={styles.webview}
-        javaScriptEnabled
-        domStorageEnabled
-        originWhitelist={["*"]}
-        mixedContentMode="always"
-        mediaPlaybackRequiresUserAction={false}
-        allowsInlineMediaPlayback
-        allowsFullscreenVideo
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
-        onError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          console.log("WebView error:", nativeEvent);
-          setLoading(false);
-        }}
-        onNavigationStateChange={(navState) => {
-          setCanGoBack(navState.canGoBack);
-        }}
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item._id}
+        ListHeaderComponent={<CreatePost onCreated={fetchPosts} />}
+        renderItem={({ item }) => (
+          <PostCard
+            post={item}
+            currentUserId={user?._id}
+            onRefresh={fetchPosts}
+          />
+        )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
-
-      {loading && (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#1877f2" />
-          <Text style={styles.loadingText}>Loading SConnect...</Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -74,27 +74,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1877f2",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+    backgroundColor: Colors.background,
   },
-
-  webview: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-
   loader: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#ffffff",
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 10,
-  },
-
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1877f2",
+    backgroundColor: Colors.background,
   },
 });
