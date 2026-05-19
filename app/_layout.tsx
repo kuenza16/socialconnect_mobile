@@ -35,6 +35,7 @@ function RootNavigator() {
       <Stack.Protected guard={isAuthenticated}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="profile/[id]" />
+        <Stack.Screen name="chat/[friendId]" />
       </Stack.Protected>
 
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />

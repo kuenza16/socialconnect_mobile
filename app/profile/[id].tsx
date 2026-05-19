@@ -14,6 +14,8 @@ import PostCard, { Post } from "@/components/PostCard";
 import { Colors, Spacing, Typography } from "@/constants/Colors";
 import API from "@/services/api";
 
+import { useAuth } from "../../hooks/useAuth";
+
 interface UserProfile {
   _id: string;
   name: string;
@@ -23,12 +25,17 @@ interface UserProfile {
 }
 
 export default function UserProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const rawId = params.id;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadProfile = useCallback(async () => {
-    if (!id) {
+    if (!id || id === "undefined") {
+      setProfile(null);
+      setLoading(false);
       return;
     }
 
@@ -59,7 +66,9 @@ export default function UserProfileScreen() {
 
       <FlatList
         data={profile?.posts || []}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) =>
+          String(item._id ?? item.id ?? `post-${index}`)
+        }
         ListHeaderComponent={
           <View style={styles.infoBlock}>
             <Text style={styles.bio}>{profile?.bio || "No bio provided"}</Text>
@@ -67,7 +76,13 @@ export default function UserProfileScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <PostCard post={item} onRefresh={loadProfile} />
+          <PostCard
+            post={item}
+            currentUserId={user?._id}
+            currentUserName={user?.name}
+            fallbackAuthorName={profile?.name}
+            onRefresh={loadProfile}
+          />
         )}
       />
     </SafeAreaView>

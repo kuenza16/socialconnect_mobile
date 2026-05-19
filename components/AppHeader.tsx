@@ -9,6 +9,10 @@ interface AppHeaderProps {
   subtitle?: string;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onPressRight?: () => void;
+  rightActions?: Array<{
+    icon: keyof typeof Ionicons.glyphMap;
+    onPress: () => void;
+  }>;
 }
 
 export default function AppHeader({
@@ -16,7 +20,15 @@ export default function AppHeader({
   subtitle,
   rightIcon,
   onPressRight,
+  rightActions,
 }: AppHeaderProps) {
+  const actions =
+    rightActions && rightActions.length > 0
+      ? rightActions
+      : rightIcon && onPressRight
+        ? [{ icon: rightIcon, onPress: onPressRight }]
+        : [];
+
   return (
     <View style={styles.container}>
       <View>
@@ -24,14 +36,19 @@ export default function AppHeader({
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
-      {rightIcon && onPressRight ? (
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={onPressRight}
-          activeOpacity={0.8}
-        >
-          <Ionicons name={rightIcon} size={20} color={Colors.black} />
-        </TouchableOpacity>
+      {actions.length > 0 ? (
+        <View style={styles.actionsContainer}>
+          {actions.map((action, index) => (
+            <TouchableOpacity
+              key={`${action.icon}-${index}`}
+              style={styles.iconButton}
+              onPress={action.onPress}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={action.icon} size={20} color={Colors.black} />
+            </TouchableOpacity>
+          ))}
+        </View>
       ) : null}
     </View>
   );
@@ -57,6 +74,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: Typography.body,
     color: Colors.gray,
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
   },
   iconButton: {
     width: 36,

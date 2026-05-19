@@ -18,16 +18,22 @@ export function useWebSocket(enabled = true) {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     if (!enabled) {
       return;
     }
 
-    connect();
+    connect().then((client) => {
+      if (mounted) {
+        setSocket(client);
+      }
+    });
 
     return () => {
-      disconnect();
+      mounted = false;
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled, connect]);
 
   return {
     socket,

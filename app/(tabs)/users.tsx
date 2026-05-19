@@ -20,6 +20,13 @@ export default function UsersScreen() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  const normalizeUser = (raw: any, index: number): UserItem => ({
+    _id: String(raw?._id ?? raw?.id ?? `user-${index}`),
+    name: String(raw?.name ?? raw?.username ?? raw?.fullName ?? "Unknown user"),
+    email: String(raw?.email ?? ""),
+    bio: raw?.bio ? String(raw.bio) : undefined,
+  });
+
   const loadData = useCallback(async () => {
     try {
       const [requestsRes, usersRes] = await Promise.all([
@@ -27,8 +34,15 @@ export default function UsersScreen() {
         API.get<UserItem[]>("/users"),
       ]);
 
-      setRequests(Array.isArray(requestsRes.data) ? requestsRes.data : []);
-      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+      const normalizedRequests = Array.isArray(requestsRes.data)
+        ? requestsRes.data.map(normalizeUser)
+        : [];
+      const normalizedUsers = Array.isArray(usersRes.data)
+        ? usersRes.data.map(normalizeUser)
+        : [];
+
+      setRequests(normalizedRequests);
+      setUsers(normalizedUsers);
     } catch (error: any) {
       Alert.alert(
         "Error",
@@ -73,7 +87,7 @@ export default function UsersScreen() {
 
       <FlatList
         data={users}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) => String(item._id ?? `user-${index}`)}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -89,19 +103,31 @@ export default function UsersScreen() {
             {requests.length === 0 ? (
               <Text style={styles.emptyText}>No pending requests</Text>
             ) : (
-              <FlatList
-                data={requests}
-                keyExtractor={(item) => item._id}
-                scrollEnabled={false}
-                renderItem={({ item }) => (
-                  <UserCard
-                    user={item}
-                    buttonLabel="Accept"
-                    onPress={() => router.push(`/profile/${item._id}`)}
-                    onPressButton={() => handleAccept(item._id)}
-                  />
-                )}
-              />
+              <>
+                {requests.map((item, index) => {
+                  const userId = String(item._id ?? `request-${index}`);
+
+                  return (
+                    <UserCard
+                      key={`request-${userId}-${index}`}
+                      user={item}
+                      buttonLabel="Accept"
+                      onPress={() => {
+                        if (!userId || userId.startsWith("request-")) {
+                          return;
+                        }
+                        router.push(`/profile/${userId}`);
+                      }}
+                      onPressButton={() => {
+                        if (!userId || userId.startsWith("request-")) {
+                          return;
+                        }
+                        handleAccept(userId);
+                      }}
+                    />
+                  );
+                })}
+              </>
             )}
 
             <Text style={[styles.sectionTitle, styles.allUsersTitle]}>
@@ -109,14 +135,28 @@ export default function UsersScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <UserCard
-            user={item}
-            buttonLabel="Add"
-            onPress={() => router.push(`/profile/${item._id}`)}
-            onPressButton={() => handleAddFriend(item._id)}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          const userId = String(item._id ?? `user-${index}`);
+
+          return (
+            <UserCard
+              user={item}
+              buttonLabel="Add"
+              onPress={() => {
+                if (!userId || userId.startsWith("user-")) {
+                  return;
+                }
+                router.push(`/profile/${userId}`);
+              }}
+              onPressButton={() => {
+                if (!userId || userId.startsWith("user-")) {
+                  return;
+                }
+                handleAddFriend(userId);
+              }}
+            />
+          );
+        }}
       />
     </SafeAreaView>
   );

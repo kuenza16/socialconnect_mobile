@@ -10,9 +10,9 @@ import {
 
 import AppHeader from "@/components/AppHeader";
 import CreatePost from "@/components/CreatePost";
-import PostCard, { Post } from "@/components/PostCard";
 import { Colors } from "@/constants/Colors";
 import API from "@/services/api";
+import PostCard, { Post } from "../../components/PostCard";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function FeedScreen() {
@@ -54,12 +54,15 @@ export default function FeedScreen() {
 
       <FlatList
         data={posts}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) =>
+          String(item._id ?? item.id ?? `post-${index}`)
+        }
         ListHeaderComponent={<CreatePost onCreated={fetchPosts} />}
         renderItem={({ item }) => (
           <PostCard
             post={item}
             currentUserId={user?._id}
+            currentUserName={user?.name}
             onRefresh={fetchPosts}
           />
         )}

@@ -10,9 +10,9 @@ import {
 } from "react-native";
 
 import AppHeader from "@/components/AppHeader";
-import PostCard, { Post } from "@/components/PostCard";
 import { Colors, Spacing, Typography } from "@/constants/Colors";
 import API from "@/services/api";
+import PostCard, { Post } from "../../components/PostCard";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function MyProfileScreen() {
@@ -43,7 +43,9 @@ export default function MyProfileScreen() {
 
       <FlatList
         data={posts}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) =>
+          String(item._id ?? item.id ?? `post-${index}`)
+        }
         ListHeaderComponent={
           <View style={styles.headerContent}>
             <Text style={styles.name}>{user?.name}</Text>
@@ -59,6 +61,8 @@ export default function MyProfileScreen() {
           <PostCard
             post={item}
             currentUserId={user?._id}
+            currentUserName={user?.name}
+            fallbackAuthorName={user?.name}
             onRefresh={loadMyPosts}
           />
         )}

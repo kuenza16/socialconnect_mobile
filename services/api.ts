@@ -51,7 +51,7 @@ export function getApiErrorMessage(error: unknown) {
   }
 
   if (!maybeAxios?.response) {
-    return "Cannot reach server. Check WSL backend, emulator host, and proxy settings.";
+    return "Cannot reach server. Check your API URL, internet connection, backend status, and proxy/CORS settings.";
   }
 
   return "Something went wrong. Please try again.";

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "61622459994",
+    "project_id": "cleaner-9bde1",
+    "storage_bucket": "cleaner-9bde1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:61622459994:android:938377ea7c164eecdf4263",
+        "android_client_info": {
+          "package_name": "com.kuenzang.socialconnectmobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAn8rXDd28nBCimC1rP_56yLT43yZsEgQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

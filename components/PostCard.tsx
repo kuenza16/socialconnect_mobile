@@ -10,7 +10,7 @@ import {
 } from "react-native";
 
 import { Colors, Radius, Spacing, Typography } from "@/constants/Colors";
-import API from "@/services/api";
+import API, { getApiErrorMessage } from "@/services/api";
 import { formatRelativeDate } from "@/utils/date";
 
 interface User {
@@ -26,69 +26,183 @@ interface Comment {
 }
 
 export interface Post {
-  _id: string;
+  _id?: string;
+  id?: string;
   content: string;
-  createdAt: string;
-  user: User;
-  likes: string[];
-  comments: Comment[];
+  createdAt?: string;
+  created_at?: string;
+  user?: User | string;
+  author?: User | string;
+  likes?: string[];
+  comments?: Comment[];
 }
 
 interface PostCardProps {
   post: Post;
   currentUserId?: string;
+  currentUserName?: string;
+  fallbackAuthorName?: string;
   onRefresh?: () => void;
 }
 
 export default function PostCard({
   post,
   currentUserId,
+  currentUserName,
+  fallbackAuthorName,
   onRefresh,
 }: PostCardProps) {
   const [comment, setComment] = useState("");
+  const [pendingLike, setPendingLike] = useState(false);
+  const [pendingComment, setPendingComment] = useState(false);
+
+  const postId = useMemo(
+    () => String(post._id ?? post.id ?? ""),
+    [post._id, post.id],
+  );
+
+  const resolveDisplayName = (raw: any): string | null => {
+    if (!raw) {
+      return null;
+    }
+
+    if (typeof raw === "string") {
+      return raw.includes("@") ? raw : null;
+    }
+
+    const fromNames =
+      raw.name ||
+      raw.username ||
+      raw.fullName ||
+      [raw.firstName, raw.lastName].filter(Boolean).join(" ") ||
+      raw.email;
+
+    return fromNames ? String(fromNames) : null;
+  };
+
+  const authorName = useMemo(() => {
+    const rawAuthor = (post as any).user ?? (post as any).author;
+    const topLevelName =
+      (post as any).userName ??
+      (post as any).username ??
+      (post as any).authorName ??
+      (post as any).name;
+
+    const direct = resolveDisplayName(rawAuthor);
+    if (direct) {
+      return direct;
+    }
+
+    if (topLevelName) {
+      return String(topLevelName);
+    }
+
+    if (typeof rawAuthor === "string" && currentUserId && currentUserName) {
+      if (String(rawAuthor) === String(currentUserId)) {
+        return currentUserName;
+      }
+    }
+
+    if (fallbackAuthorName) {
+      return fallbackAuthorName;
+    }
+
+    return "Unknown user";
+  }, [post, currentUserId, currentUserName, fallbackAuthorName]);
+
+  const likes = useMemo(() => {
+    if (!Array.isArray(post.likes)) {
+      return [] as string[];
+    }
+    return post.likes.map(String);
+  }, [post.likes]);
+
+  const comments = useMemo(() => {
+    if (!Array.isArray(post.comments)) {
+      return [] as Comment[];
+    }
+
+    return post.comments.map((item: any, index) => {
+      const rawUser = item?.user ?? item?.author ?? item?.createdBy;
+      const parsedName =
+        resolveDisplayName(rawUser) ||
+        item?.userName ||
+        item?.authorName ||
+        "Unknown user";
+
+      return {
+        _id: String(item?._id ?? item?.id ?? `comment-${index}`),
+        content: String(item?.content ?? item?.text ?? item?.message ?? ""),
+        createdAt: String(item?.createdAt ?? item?.created_at ?? ""),
+        user: {
+          _id: String(
+            (typeof rawUser === "object" &&
+              rawUser &&
+              (rawUser._id ?? rawUser.id)) ||
+              "",
+          ),
+          name: String(parsedName),
+        },
+      } as Comment;
+    });
+  }, [post.comments]);
+
   const liked = useMemo(
-    () => (currentUserId ? post.likes?.includes(currentUserId) : false),
-    [post.likes, currentUserId],
+    () => (currentUserId ? likes.includes(String(currentUserId)) : false),
+    [likes, currentUserId],
   );
 
   const handleLike = async () => {
-    try {
-      await API.post(`/posts/${post._id}/like`);
-      onRefresh?.();
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message || "Unable to like post",
-      );
-    }
-  };
-
-  const handleComment = async () => {
-    if (!comment.trim()) {
+    if (!postId || pendingLike) {
       return;
     }
 
     try {
-      await API.post(`/posts/${post._id}/comment`, { content: comment.trim() });
-      setComment("");
+      setPendingLike(true);
+      await API.post(`/posts/${postId}/like`);
       onRefresh?.();
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message || "Unable to add comment",
-      );
+    } catch (error) {
+      Alert.alert("Error", getApiErrorMessage(error));
+    } finally {
+      setPendingLike(false);
     }
   };
 
+  const handleComment = async () => {
+    const content = comment.trim();
+    if (!content || !postId || pendingComment) {
+      return;
+    }
+
+    try {
+      setPendingComment(true);
+      await API.post(`/posts/${postId}/comment`, { content });
+      setComment("");
+      onRefresh?.();
+    } catch (error) {
+      Alert.alert("Error", getApiErrorMessage(error));
+    } finally {
+      setPendingComment(false);
+    }
+  };
+
+  const createdAt = post.createdAt ?? post.created_at;
+
   return (
     <View style={styles.card}>
-      <Text style={styles.author}>{post.user?.name || "Unknown user"}</Text>
-      <Text style={styles.date}>{formatRelativeDate(post.createdAt)}</Text>
+      <Text style={styles.author}>{authorName}</Text>
+      <Text style={styles.date}>
+        {createdAt ? formatRelativeDate(createdAt) : "Now"}
+      </Text>
       <Text style={styles.content}>{post.content}</Text>
 
-      <TouchableOpacity style={styles.likeButton} onPress={handleLike}>
+      <TouchableOpacity
+        style={styles.likeButton}
+        onPress={handleLike}
+        disabled={pendingLike}
+      >
         <Text style={styles.likeText}>
-          {liked ? "❤️" : "🤍"} {post.likes?.length || 0} likes
+          {liked ? "❤️" : "🤍"} {likes.length} likes
         </Text>
       </TouchableOpacity>
 
@@ -99,14 +213,20 @@ export default function PostCard({
           placeholder="Write a comment"
           style={styles.commentInput}
         />
-        <TouchableOpacity style={styles.commentButton} onPress={handleComment}>
-          <Text style={styles.commentButtonText}>Send</Text>
+        <TouchableOpacity
+          style={styles.commentButton}
+          onPress={handleComment}
+          disabled={pendingComment}
+        >
+          <Text style={styles.commentButtonText}>
+            {pendingComment ? "..." : "Send"}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {post.comments?.length ? (
+      {comments.length > 0 ? (
         <FlatList
-          data={post.comments}
+          data={comments}
           keyExtractor={(item) => item._id}
           scrollEnabled={false}
           renderItem={({ item }) => (
